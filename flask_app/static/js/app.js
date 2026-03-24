@@ -795,6 +795,7 @@ async function loadAndRenderAlerts() {
   try {
     const alerts = await fetch("/api/alerts").then(r => r.json());
     const panel = document.getElementById("alertsPanel");
+    const countBadge = document.getElementById("alertsCountBadge");
 
     // Update banner
     renderAlertBanner(alerts);
@@ -804,6 +805,12 @@ async function loadAndRenderAlerts() {
       return;
     }
     if (panel) panel.style.display = "block";
+
+    // Update count badge
+    if (countBadge) {
+      countBadge.textContent = alerts.length;
+      countBadge.style.display = "inline-flex";
+    }
 
     container.innerHTML = alerts.map(a => `
       <div class="alert-row alert-row-${a.delay_status}" data-pr-id="${a.pr_id}" data-task-id="${a.task_id}">
@@ -833,6 +840,31 @@ async function loadAndRenderAlerts() {
       </div>`).join("");
   } catch (err) {
     console.error("[v0] Failed to load alerts:", err);
+  }
+}
+
+function toggleAlertsPanel() {
+  const container = document.getElementById("alertsList");
+  const toggleIcon = document.getElementById("alertsToggleIcon");
+  
+  if (!container || !toggleIcon) return;
+  
+  const isHidden = container.style.display === "none";
+  
+  if (isHidden) {
+    // Expand
+    container.style.display = "block";
+    setTimeout(() => {
+      container.style.maxHeight = container.scrollHeight + "px";
+    }, 10);
+    toggleIcon.style.transform = "rotate(180deg)";
+  } else {
+    // Collapse
+    container.style.maxHeight = "0";
+    toggleIcon.style.transform = "rotate(0deg)";
+    setTimeout(() => {
+      container.style.display = "none";
+    }, 300);
   }
 }
 

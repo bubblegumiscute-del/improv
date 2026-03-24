@@ -118,11 +118,17 @@
 
   <!-- ── ALERTS PANEL ───────────────────────────────────────────────────── -->
   <div class="alerts-panel" id="alertsPanel" style="display:none">
-    <div class="alerts-panel-header">
-      <span class="glyphicon glyphicon-alert"></span>
-      Alertes Délais — Étapes en Retard ou à Risque
+    <div class="alerts-panel-header" onclick="toggleAlertsPanel()">
+      <div class="alerts-panel-title">
+        <span class="glyphicon glyphicon-alert"></span>
+        <span id="alertsPanelTitle">Alertes Délais</span>
+        <span class="alerts-count-badge" id="alertsCountBadge"></span>
+      </div>
+      <span class="alerts-toggle-icon" id="alertsToggleIcon" style="transition: transform 0.3s">
+        <span class="glyphicon glyphicon-chevron-down"></span>
+      </span>
     </div>
-    <div id="alertsList" class="alerts-list"></div>
+    <div id="alertsList" class="alerts-list" style="display:none;max-height:0;overflow:hidden;transition:max-height 0.3s ease-out"></div>
   </div>
 
   <!-- ── KPI DÉLAI DE TRAITEMENT ───────────────────────────────────────────── -->
@@ -355,7 +361,7 @@
   </div>
 </div>
 
-<!-- ══════���════════════ DOCUMENT EDIT MODAL ════════════════════════════════ -->
+<!-- ══════�����════════════ DOCUMENT EDIT MODAL ════════════════════════════════ -->
 <div id="documentEditModal" class="modal" style="display:none">
   <div class="modal-content" style="max-width:400px">
     <div class="modal-header">
