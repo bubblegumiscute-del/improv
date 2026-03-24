@@ -628,7 +628,7 @@ function delayIcon(delay) {
   return "";
 }
 
-/* ── DASHBOARD ──────────────────────────────────────────────────────────────── */
+/* ── DASHBOARD ────────────────────────────────────────────────────���─────────── */
 function updateDashboard() {
   const total    = allPRs.length;
   const cloturee = allPRs.filter(p => p.status === "cloturee").length;
@@ -752,35 +752,6 @@ function renderRecentActivity() {
   }).join("");
 }
 
-/* ── ALERT BANNER ───────────────────────────────────────────────────────────── */
-function renderAlertBanner(alerts) {
-  const banner = document.getElementById("alertBanner");
-  if (!banner) return;
-  
-  const totalLate = alerts.filter(a => a.delay_status === "late").length;
-  
-  if (alerts.length === 0) {
-    banner.style.display = "none";
-    return;
-  }
-  banner.style.display = "flex";
-  let msg = "";
-  if (totalLate > 0) {
-    msg += `<span class="alert-item alert-late">
-              <span class="glyphicon glyphicon-warning-sign"></span>
-              <strong>${totalLate}</strong> étape${totalLate > 1 ? "s" : ""} en retard critique
-            </span>`;
-  }
-  if (alerts.length - totalLate > 0) {
-    msg += `<span class="alert-item alert-warning">
-              <span class="glyphicon glyphicon-time"></span>
-              <strong>${alerts.length - totalLate}</strong> étape${alerts.length - totalLate > 1 ? "s" : ""} en retard
-            </span>`;
-  }
-  const msgEl = document.getElementById("alertBannerMsg");
-  if (msgEl) msgEl.innerHTML = msg;
-}
-
 /* Helper: Format delay in human-readable format (days, hours) */
 function formatDelay(days) {
   if (days <= 0) return "À jour";
@@ -800,9 +771,6 @@ async function loadAndRenderAlerts() {
     const alerts = await fetch("/api/alerts").then(r => r.json());
     const panel = document.getElementById("alertsPanel");
     const countBadge = document.getElementById("alertsCountBadge");
-
-    // Update banner
-    renderAlertBanner(alerts);
 
     if (!alerts.length) {
       if (panel) panel.style.display = "none";
@@ -1414,7 +1382,7 @@ function bindStatusDropdown() {
   });
 }
 
-/* ── IMPORT / EXPORT ─────────────────────────────────────────────────���───────── */
+/* ── IMPORT / EXPORT ───────────────────────────���─────────────────────���───────── */
 function bindImportExport() {
   document.getElementById("btnImport").addEventListener("click", () => {
     document.getElementById("importFileInput").click();

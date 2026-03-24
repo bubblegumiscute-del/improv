@@ -951,7 +951,7 @@ html, body {
 
 /* ══════════════════��═������������═════════════════════════════════════════════════════
    ALERTS PANEL — detailed list below charts
-   ════════════════════════���═════════════════════════���═������═���═���═���═���═════════════ */
+   ════════════════════════���═════════════════════════�����═������═���═���═���═���═════════════ */
 .alerts-panel {
   background: var(--white);
   border-radius: 14px;
@@ -990,8 +990,26 @@ html, body {
 }
 .alerts-list {
   padding: 8px 0;
-  max-height: 400px;
+  max-height: 500px;
   overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.alerts-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.alerts-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.alerts-list::-webkit-scrollbar-thumb {
+  background: var(--grey-300);
+  border-radius: 3px;
+}
+
+.alerts-list::-webkit-scrollbar-thumb:hover {
+  background: var(--grey-400);
 }
 
 /* Alert Groups (by PR) */
