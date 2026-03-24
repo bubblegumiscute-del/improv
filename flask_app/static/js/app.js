@@ -1087,6 +1087,9 @@ async function toggleTask(event, prId, tid) {
     pr.warning_steps = res.warning_steps;
     updateDashboard();
   }
+  // Refresh alerts immediately when task is toggled (done status changed)
+  // This ensures completed tasks no longer show alerts
+  await loadAndRenderAlerts();
 }
 
 async function handleDateReelle(prId, tid, value) {
