@@ -553,7 +553,7 @@ function renderPRList() {
     }
     
     return `
-    <div class="pr-item ${pr.id === selectedPRId ? "selected" : ""}" data-id="${pr.id}" onclick="selectPR('${pr.id}')">
+    <div class="pr-item ${pr.id === selectedPRId ? "selected" : ""}" data-id="${pr.id}" data-pr-id="${pr.id}" onclick="selectPR('${pr.id}')" data-alert-status="none">
       <div class="pr-item-top">
         <div>
           <div class="pr-item-number">PR #${pr.number}</div>
@@ -571,6 +571,7 @@ function renderPRList() {
       <div class="pr-item-meta">
         <span class="pr-cat-badge">${pr.category}</span>
         <span class="pr-date"><span class="glyphicon glyphicon-calendar"></span> ${pr.createdDate}</span>
+        <span class="pr-alert-indicator" data-pr-id="${pr.id}" title="Pas d'alerte" style="width:12px;height:12px;border-radius:50%;background:#27AE60;display:inline-flex;align-items:center;justify-content:center;font-size:8px;flex-shrink:0"></span>
       </div>
       <div class="pr-item-progress" style="margin-bottom:4px">
         <div class="mini-progress-track">
@@ -591,6 +592,9 @@ function renderPRList() {
       </div>
     </div>`;
   }).join("");
+  
+  // Update alert indicators after rendering
+  updatePRAlertIndicators();
 }
 
 function statusLabel(s) {
@@ -812,34 +816,144 @@ async function loadAndRenderAlerts() {
       countBadge.style.display = "inline-flex";
     }
 
-    container.innerHTML = alerts.map(a => `
-      <div class="alert-row alert-row-${a.delay_status}" data-pr-id="${a.pr_id}" data-task-id="${a.task_id}">
-        <div class="alert-row-icon">
-          ${a.delay_status === "late"
-            ? `<span class="glyphicon glyphicon-warning-sign"></span>`
-            : `<span class="glyphicon glyphicon-time"></span>`}
-        </div>
-        <div class="alert-row-body" onclick="selectPR('${a.pr_id}')" style="cursor:pointer;flex:1">
-          <div class="alert-row-pr">PR #${a.pr_number} — <span class="alert-row-title">${escHtml(a.pr_title)}</span></div>
-          <div class="alert-row-step">Étape ${a.task_id} : ${escHtml(a.task_title)}</div>
-          <div class="alert-row-dates">
-            <span><span class="glyphicon glyphicon-calendar"></span> Prév : ${a.date_prev || "—"}</span>
-            <span class="delay-info" style="color:#C0392B;font-weight:bold">
-              <span class="glyphicon glyphicon-alert"></span> ${formatDelay(a.current_delay_days)}
-            </span>
-          </div>
-        </div>
-        <div class="alert-row-actions">
-          <button class="btn-snooze" onclick="openSnoozeMenu(event, '${a.pr_id}', '${a.task_id}')" title="Masquer cette alerte">
-            <span class="glyphicon glyphicon-pause"></span> Masquer
-          </button>
-          <span class="delay-chip chip-${a.delay_status === "late" ? "late" : "warning"}">
-            ${a.delay_status === "late" ? "En retard" : "Retard"}
+    // Group alerts by PR
+    const alertsByPR = {};
+    alerts.forEach(a => {
+      if (!alertsByPR[a.pr_id]) {
+        alertsByPR[a.pr_id] = {
+          pr_number: a.pr_number,
+          pr_title: a.pr_title,
+          alerts: [],
+          hasLate: false
+        };
+      }
+      alertsByPR[a.pr_id].alerts.push(a);
+      if (a.delay_status === "late") {
+        alertsByPR[a.pr_id].hasLate = true;
+      }
+    });
+
+    // Render grouped alerts
+    container.innerHTML = Object.values(alertsByPR).map(prGroup => `
+      <div class="alert-group">
+        <div class="alert-group-header" onclick="toggleAlertGroup(event)" style="cursor:pointer">
+          <span class="alert-group-icon">
+            ${prGroup.hasLate
+              ? `<span class="glyphicon glyphicon-warning-sign" style="color:#C0392B"></span>`
+              : `<span class="glyphicon glyphicon-time" style="color:#CA6F1E"></span>`}
+          </span>
+          <span class="alert-group-title">
+            PR #${prGroup.pr_number} — ${escHtml(prGroup.pr_title)}
+          </span>
+          <span class="alert-group-count">${prGroup.alerts.length}</span>
+          <span class="alert-group-toggle" style="transition:transform 0.3s">
+            <span class="glyphicon glyphicon-chevron-down"></span>
           </span>
         </div>
-      </div>`).join("");
+        <div class="alert-group-content" style="display:none;max-height:0;overflow:hidden;transition:max-height 0.3s ease-out">
+          ${prGroup.alerts.map(a => `
+            <div class="alert-row alert-row-${a.delay_status}" data-pr-id="${a.pr_id}" data-task-id="${a.task_id}">
+              <div class="alert-row-icon">
+                ${a.delay_status === "late"
+                  ? `<span class="glyphicon glyphicon-warning-sign"></span>`
+                  : `<span class="glyphicon glyphicon-time"></span>`}
+              </div>
+              <div class="alert-row-body" onclick="selectPR('${a.pr_id}')" style="cursor:pointer;flex:1">
+                <div class="alert-row-step">Étape ${a.task_id} : ${escHtml(a.task_title)}</div>
+                <div class="alert-row-dates">
+                  <span><span class="glyphicon glyphicon-calendar"></span> Prév : ${a.date_prev || "—"}</span>
+                  <span class="delay-info" style="color:#C0392B;font-weight:bold">
+                    <span class="glyphicon glyphicon-alert"></span> ${formatDelay(a.current_delay_days)}
+                  </span>
+                </div>
+              </div>
+              <div class="alert-row-actions">
+                <button class="btn-snooze" onclick="openSnoozeMenu(event, '${a.pr_id}', '${a.task_id}')" title="Masquer cette alerte">
+                  <span class="glyphicon glyphicon-pause"></span> Masquer
+                </button>
+                <span class="delay-chip chip-${a.delay_status === "late" ? "late" : "warning"}">
+                  ${a.delay_status === "late" ? "En retard" : "Retard"}
+                </span>
+              </div>
+            </div>
+          `).join("")}
+        </div>
+      </div>
+      `).join("");
+    
+    // Update PR alert indicators
+    updatePRAlertIndicators();
   } catch (err) {
     console.error("[v0] Failed to load alerts:", err);
+  }
+}
+
+function toggleAlertGroup(event) {
+  const header = event.currentTarget;
+  const content = header.nextElementSibling;
+  const toggle = header.querySelector(".alert-group-toggle");
+  
+  if (!content || !toggle) return;
+  
+  const isHidden = content.style.display === "none";
+  
+  if (isHidden) {
+    // Expand
+    content.style.display = "block";
+    setTimeout(() => {
+      content.style.maxHeight = content.scrollHeight + "px";
+    }, 10);
+    toggle.style.transform = "rotate(180deg)";
+  } else {
+    // Collapse
+    content.style.maxHeight = "0";
+    toggle.style.transform = "rotate(0deg)";
+    setTimeout(() => {
+      content.style.display = "none";
+    }, 300);
+  }
+}
+
+async function updatePRAlertIndicators() {
+  try {
+    const alerts = await fetch("/api/alerts").then(r => r.json());
+    
+    // Create a map of PR alerts
+    const prAlerts = {};
+    alerts.forEach(a => {
+      if (!prAlerts[a.pr_id]) {
+        prAlerts[a.pr_id] = { hasLate: false, count: 0 };
+      }
+      prAlerts[a.pr_id].count++;
+      if (a.delay_status === "late") {
+        prAlerts[a.pr_id].hasLate = true;
+      }
+    });
+    
+    // Update all PR indicators
+    document.querySelectorAll(".pr-alert-indicator").forEach(indicator => {
+      const prId = indicator.getAttribute("data-pr-id");
+      const alertData = prAlerts[prId];
+      
+      if (alertData) {
+        // Has alerts
+        if (alertData.hasLate) {
+          // Red for critical delay
+          indicator.style.background = "#C0392B";
+          indicator.title = `${alertData.count} étape(s) en retard critique`;
+        } else {
+          // Yellow/Orange for warning
+          indicator.style.background = "#CA6F1E";
+          indicator.title = `${alertData.count} étape(s) en retard`;
+        }
+      } else {
+        // No alerts - green
+        indicator.style.background = "#27AE60";
+        indicator.title = "Pas d'alerte";
+      }
+    });
+  } catch (err) {
+    console.error("[v0] Failed to update alert indicators:", err);
   }
 }
 
