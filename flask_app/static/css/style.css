@@ -949,9 +949,9 @@ html, body {
 }
 .alert-banner-link:hover { text-decoration: underline; }
 
-/* ═════════════════════���������═════════════════════════════════════════════════════
+/* ══════════════════��══���������═════════════════════════════════════════════════════
    ALERTS PANEL — detailed list below charts
-   ════════════════════════���══════════════════════════════���═���═���═���═════════════ */
+   ════════════════════════���════════════════════════════���═���═���═���═���═════════════ */
 .alerts-panel {
   background: var(--white);
   border-radius: 14px;
@@ -1003,13 +1003,55 @@ html, body {
 .alert-row-dates span { display: flex; align-items: center; gap: 4px; }
 
 .alert-row-badge { flex-shrink: 0; }
+.alert-row-actions {
+  display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+}
+.btn-snooze {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #D0D0D0;
+  background: var(--white);
+  color: var(--grey-900);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .2s;
+}
+.btn-snooze:hover {
+  background: var(--grey-50);
+  border-color: #B0B0B0;
+}
 .delay-chip {
   display: inline-flex; align-items: center;
-  padding: 3px 10px; border-radius: 20px;
+  padding: 4px 10px; border-radius: 20px;
   font-size: 11px; font-weight: 700;
 }
 .chip-late    { background: #FADBD8; color: #C0392B; }
 .chip-warning { background: #FDEBD0; color: #CA6F1E; }
+
+/* Snooze Modal Styles */
+.btn-snooze-option {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--grey-300);
+  background: var(--white);
+  color: var(--grey-900);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all .2s;
+}
+.btn-snooze-option:hover {
+  background: var(--grey-50);
+  border-color: var(--red);
+  color: var(--red);
+}
+.btn-snooze-option span:first-child {
+  font-size: 16px; color: var(--red);
+}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    DOCUMENTS MODAL

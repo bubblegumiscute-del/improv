@@ -1,4 +1,4 @@
-﻿from flask import Flask, render_template, request, jsonify, send_file
+from flask import Flask, render_template, request, jsonify, send_file
 import os
 import sqlite3
 import json
@@ -66,6 +66,11 @@ def init_db():
         c.execute("ALTER TABLE pr ADD COLUMN base_category TEXT DEFAULT ''")
         # Backfill: set base_category = category for all existing rows
         c.execute("UPDATE pr SET base_category = category WHERE base_category = '' OR base_category IS NULL")
+    
+    # Migration: add alert_snoozed_until column to task table if it doesn't exist
+    task_cols = [row[1] for row in c.execute("PRAGMA table_info(task)").fetchall()]
+    if "alert_snoozed_until" not in task_cols:
+        c.execute("ALTER TABLE task ADD COLUMN alert_snoozed_until TEXT DEFAULT NULL")
     
     c.execute("""
         CREATE TABLE IF NOT EXISTS document (
@@ -355,28 +360,33 @@ def compute_progress(tasks: dict) -> int:
     completed = sum(1 for t in tasks.values() if t.get("done"))
     return round((completed / len(tasks)) * 100)
 
-def delay_status(date_prev: str, date_reelle: str) -> str:
+def delay_status(date_prev: str, date_reelle: str) -> dict:
     """
-    Returns:
-      'ontime'  — réelle <= prév
-      'warning' — réelle entre 1 et 5 jours après prév
-      'late'    — réelle > 5 jours après prév
-      ''        — données manquantes
+    Returns delay status based on date_prev and TODAY (continuous calculation).
+    Only triggers alert if date_prev is set and delay > 5 days.
+    
+    Returns dict:
+      'status': 'ontime'|'warning'|'late'|'' (empty if no date_prev)
+      'delay_days': int (days from date_prev to TODAY)
+      'should_alert': bool (True if delay > 5 days and not completed)
     """
-    if not date_prev or not date_reelle:
-        return ""
+    if not date_prev:
+        return {"status": "", "delay_days": 0, "should_alert": False}
+    
     try:
         dp = date.fromisoformat(date_prev)
-        dr = date.fromisoformat(date_reelle)
-        delta = (dr - dp).days
+        today = date.today()
+        delta = (today - dp).days
+        
+        # Only alert if date_prev has passed and we're calculating from it
         if delta <= 0:
-            return "ontime"
+            return {"status": "ontime", "delay_days": 0, "should_alert": False}
         elif delta <= 5:
-            return "warning"
+            return {"status": "warning", "delay_days": delta, "should_alert": False}
         else:
-            return "late"
+            return {"status": "late", "delay_days": delta, "should_alert": True}
     except ValueError:
-        return ""
+        return {"status": "", "delay_days": 0, "should_alert": False}
 
 def calculate_processing_time(tasks: dict, created_date: str) -> dict:
     """
@@ -429,18 +439,22 @@ def load_tasks(conn, pr_id: str) -> dict:
         "SELECT * FROM task WHERE pr_id = ? ORDER BY CAST(task_id AS INTEGER)",
         (pr_id,)
     ).fetchall()
-    return {
-        str(r["task_id"]): {
+    tasks = {}
+    for r in rows:
+        delay_info = delay_status(r["date_prev"], r["date_reelle"])
+        tasks[str(r["task_id"])] = {
             "title":       r["title"] or "",
             "desc":        r["description"] or "",
             "done":        bool(r["done"]),
             "date_prev":   r["date_prev"] or "",
             "date_reelle": r["date_reelle"] or "",
             "note":        r["note"] or "",
-            "delay":       delay_status(r["date_prev"], r["date_reelle"]),
+            "alert_snoozed_until": r["alert_snoozed_until"] or "",
+            "delay":       delay_info["status"],
+            "delay_days":  delay_info["delay_days"],
+            "should_alert": delay_info["should_alert"],
         }
-        for r in rows
-    }
+    return tasks
 
 def count_late_steps_for_pr(tasks: dict) -> dict:
     """Returns counts of warning and late steps."""
@@ -808,14 +822,29 @@ def get_steps(category):
 
 @app.route("/api/alerts")
 def get_alerts():
-    """Returns all PR/steps that are late or in warning state."""
-    conn  = get_db()
-    rows  = conn.execute("SELECT * FROM pr WHERE status = 'en-cours'").fetchall()
+    """
+    Returns all PR/steps that have delays > 5 days from date_prev to today.
+    Respects snooze settings - only shows alerts not currently snoozed.
+    """
+    conn = get_db()
+    rows = conn.execute("SELECT * FROM pr WHERE status = 'en-cours'").fetchall()
     alerts = []
+    now = datetime.now().isoformat()
+    
     for r in rows:
-        tasks  = load_tasks(conn, r["id"])
+        tasks = load_tasks(conn, r["id"])
         for tid, task in tasks.items():
-            if task["delay"] in ("warning", "late") and not task["done"]:
+            # Skip if task is completed or has no date_prev
+            if task["done"] or not task["date_prev"]:
+                continue
+            
+            # Check if alert is snoozed
+            snoozed_until = task.get("alert_snoozed_until", "")
+            if snoozed_until and snoozed_until > now:
+                continue  # Skip this alert, it's snoozed
+            
+            # Only show alerts for tasks with delay > 5 days from date_prev
+            if task["should_alert"]:
                 alerts.append({
                     "pr_id":       r["id"],
                     "pr_number":   r["number"],
@@ -823,12 +852,44 @@ def get_alerts():
                     "task_id":     tid,
                     "task_title":  task["title"],
                     "date_prev":   task["date_prev"],
-                    "date_reelle": task["date_reelle"],
-                    "delay":       task["delay"],
+                    "current_delay_days": task["delay_days"],
+                    "delay_status": task["delay"],
                 })
+    
     conn.close()
-    alerts.sort(key=lambda a: (0 if a["delay"] == "late" else 1))
+    alerts.sort(key=lambda a: (0 if a["delay_status"] == "late" else 1, a["current_delay_days"]), reverse=True)
     return jsonify(alerts)
+
+
+@app.route("/api/alerts/<pr_id>/<task_id>/snooze", methods=["POST"])
+def snooze_alert(pr_id, task_id):
+    """
+    Snooze an alert for a specified duration.
+    Body: {"duration_hours": int}
+    """
+    try:
+        data = request.get_json()
+        duration_hours = data.get("duration_hours", 24)  # Default 24 hours
+        
+        from datetime import timedelta
+        snooze_until = datetime.now() + timedelta(hours=duration_hours)
+        snooze_until_str = snooze_until.isoformat()
+        
+        conn = get_db()
+        conn.execute(
+            "UPDATE task SET alert_snoozed_until = ? WHERE pr_id = ? AND task_id = ?",
+            (snooze_until_str, pr_id, task_id)
+        )
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            "success": True,
+            "message": f"Alert snoozed for {duration_hours} hours",
+            "snoozed_until": snooze_until_str
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
 
 
 # ── EXPORT EXCEL ──────────────────────────────────────────────────────────────

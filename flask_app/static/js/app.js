@@ -30,6 +30,10 @@ document.addEventListener("DOMContentLoaded", () => {
   bindHelpButton();
   bindDocumentsButton();
   bindKPIControls();
+  
+  // Auto-refresh alerts every 5 seconds for real-time updates
+  loadAndRenderAlerts();
+  setInterval(loadAndRenderAlerts, 5000);
 });
 
 /* ── CLOCK ──────────────────────────────────────────────────────────────────── */
@@ -745,10 +749,13 @@ function renderRecentActivity() {
 }
 
 /* ── ALERT BANNER ───────────────────────────────────────────────────────────── */
-function renderAlertBanner(totalLate, totalWarning) {
+function renderAlertBanner(alerts) {
   const banner = document.getElementById("alertBanner");
   if (!banner) return;
-  if (totalLate === 0 && totalWarning === 0) {
+  
+  const totalLate = alerts.filter(a => a.delay_status === "late").length;
+  
+  if (alerts.length === 0) {
     banner.style.display = "none";
     return;
   }
@@ -760,49 +767,123 @@ function renderAlertBanner(totalLate, totalWarning) {
               <strong>${totalLate}</strong> étape${totalLate > 1 ? "s" : ""} en retard critique
             </span>`;
   }
-  if (totalWarning > 0) {
+  if (alerts.length - totalLate > 0) {
     msg += `<span class="alert-item alert-warning">
               <span class="glyphicon glyphicon-time"></span>
-              <strong>${totalWarning}</strong> étape${totalWarning > 1 ? "s" : ""} à risque de retard
+              <strong>${alerts.length - totalLate}</strong> étape${alerts.length - totalLate > 1 ? "s" : ""} en retard
             </span>`;
   }
   const msgEl = document.getElementById("alertBannerMsg");
   if (msgEl) msgEl.innerHTML = msg;
 }
 
+/* Helper: Format delay in human-readable format (days, hours) */
+function formatDelay(days) {
+  if (days <= 0) return "À jour";
+  if (days === 1) return "1 jour de retard";
+  if (days < 7) return `${days} jours de retard`;
+  const weeks = Math.floor(days / 7);
+  const remainDays = days % 7;
+  if (remainDays === 0) return `${weeks} semaine${weeks > 1 ? "s" : ""} de retard`;
+  return `${weeks}s ${remainDays}j de retard`;
+}
+
 async function loadAndRenderAlerts() {
   const container = document.getElementById("alertsList");
   if (!container) return;
-  const alerts = await fetch("/api/alerts").then(r => r.json());
-  const panel   = document.getElementById("alertsPanel");
+  
+  try {
+    const alerts = await fetch("/api/alerts").then(r => r.json());
+    const panel = document.getElementById("alertsPanel");
 
-  if (!alerts.length) {
-    if (panel) panel.style.display = "none";
-    return;
-  }
-  if (panel) panel.style.display = "block";
+    // Update banner
+    renderAlertBanner(alerts);
 
-  container.innerHTML = alerts.map(a => `
-    <div class="alert-row alert-row-${a.delay}" onclick="selectPR('${a.pr_id}')">
-      <div class="alert-row-icon">
-        ${a.delay === "late"
-          ? `<span class="glyphicon glyphicon-warning-sign"></span>`
-          : `<span class="glyphicon glyphicon-time"></span>`}
-      </div>
-      <div class="alert-row-body">
-        <div class="alert-row-pr">PR #${a.pr_number} — <span class="alert-row-title">${escHtml(a.pr_title)}</span></div>
-        <div class="alert-row-step">Étape ${a.task_id} : ${escHtml(a.task_title)}</div>
-        <div class="alert-row-dates">
-          <span><span class="glyphicon glyphicon-calendar"></span> Prév : ${a.date_prev || "—"}</span>
-          <span><span class="glyphicon glyphicon-ok"></span> Réelle : ${a.date_reelle || "—"}</span>
+    if (!alerts.length) {
+      if (panel) panel.style.display = "none";
+      return;
+    }
+    if (panel) panel.style.display = "block";
+
+    container.innerHTML = alerts.map(a => `
+      <div class="alert-row alert-row-${a.delay_status}" data-pr-id="${a.pr_id}" data-task-id="${a.task_id}">
+        <div class="alert-row-icon">
+          ${a.delay_status === "late"
+            ? `<span class="glyphicon glyphicon-warning-sign"></span>`
+            : `<span class="glyphicon glyphicon-time"></span>`}
         </div>
-      </div>
-      <div class="alert-row-badge">
-        ${a.delay === "late"
-          ? `<span class="delay-chip chip-late">En retard</span>`
-          : `<span class="delay-chip chip-warning">Risque</span>`}
-      </div>
-    </div>`).join("");
+        <div class="alert-row-body" onclick="selectPR('${a.pr_id}')" style="cursor:pointer;flex:1">
+          <div class="alert-row-pr">PR #${a.pr_number} — <span class="alert-row-title">${escHtml(a.pr_title)}</span></div>
+          <div class="alert-row-step">Étape ${a.task_id} : ${escHtml(a.task_title)}</div>
+          <div class="alert-row-dates">
+            <span><span class="glyphicon glyphicon-calendar"></span> Prév : ${a.date_prev || "—"}</span>
+            <span class="delay-info" style="color:#C0392B;font-weight:bold">
+              <span class="glyphicon glyphicon-alert"></span> ${formatDelay(a.current_delay_days)}
+            </span>
+          </div>
+        </div>
+        <div class="alert-row-actions">
+          <button class="btn-snooze" onclick="openSnoozeMenu(event, '${a.pr_id}', '${a.task_id}')" title="Masquer cette alerte">
+            <span class="glyphicon glyphicon-pause"></span> Masquer
+          </button>
+          <span class="delay-chip chip-${a.delay_status === "late" ? "late" : "warning"}">
+            ${a.delay_status === "late" ? "En retard" : "Retard"}
+          </span>
+        </div>
+      </div>`).join("");
+  } catch (err) {
+    console.error("[v0] Failed to load alerts:", err);
+  }
+}
+
+/* ── SNOOZE ALERT FUNCTIONS ─────────────────────────────────────────────────── */
+let snoozingAlert = null;
+
+function openSnoozeMenu(event, prId, taskId) {
+  event.stopPropagation();
+  snoozingAlert = { prId, taskId };
+  
+  const modal = document.getElementById("snoozeModal");
+  if (modal) {
+    modal.style.display = "flex";
+  }
+}
+
+async function snoozeAlert(hours) {
+  if (!snoozingAlert) return;
+  
+  try {
+    const { prId, taskId } = snoozingAlert;
+    const response = await fetch(`/api/alerts/${prId}/${taskId}/snooze`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ duration_hours: hours })
+    });
+    
+    if (!response.ok) {
+      showToast("Erreur lors du masquage de l'alerte", "error");
+      return;
+    }
+    
+    const data = await response.json();
+    
+    // Close modal
+    const modal = document.getElementById("snoozeModal");
+    if (modal) modal.style.display = "none";
+    
+    // Show toast
+    const hourLabel = hours === 1 ? "heure" : hours < 24 ? "heures" : "jours";
+    const duration = hours < 24 ? hours : Math.round(hours / 24);
+    showToast(`Alerte masquée pour ${duration} ${hourLabel}`, "success");
+    
+    // Refresh alerts
+    await loadAndRenderAlerts();
+    
+    snoozingAlert = null;
+  } catch (err) {
+    console.error("[v0] Failed to snooze alert:", err);
+    showToast("Erreur lors du masquage de l'alerte", "error");
+  }
 }
 
 /* ── SELECT PR — SHOW CHECKLIST ─────────────────────────────────────────────── */

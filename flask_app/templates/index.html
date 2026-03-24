@@ -355,7 +355,7 @@
   </div>
 </div>
 
-<!-- ═══════════════════ DOCUMENT EDIT MODAL ════════════════════════════════ -->
+<!-- ══════���════════════ DOCUMENT EDIT MODAL ════════════════════════════════ -->
 <div id="documentEditModal" class="modal" style="display:none">
   <div class="modal-content" style="max-width:400px">
     <div class="modal-header">
@@ -459,6 +459,46 @@
           Annuler
         </button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ SNOOZE ALERT MODAL ═════════════════════════════════ -->
+<div id="snoozeModal" class="modal" style="display:none">
+  <div class="modal-content" style="max-width:380px">
+    <div class="modal-header">
+      <h3 class="modal-title">
+        <span class="glyphicon glyphicon-pause"></span>
+        Masquer l'alerte
+      </h3>
+      <button class="modal-close" onclick="closeModal('snoozeModal')">&times;</button>
+    </div>
+    
+    <div class="modal-body">
+      <p style="color:#666;font-size:13px;margin-bottom:20px">
+        Pour combien de temps voulez-vous masquer cette alerte ?
+      </p>
+      
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <button class="btn-snooze-option" onclick="snoozeAlert(24)">
+          <span class="glyphicon glyphicon-time"></span>
+          <span>24 heures</span>
+        </button>
+        <button class="btn-snooze-option" onclick="snoozeAlert(72)">
+          <span class="glyphicon glyphicon-calendar"></span>
+          <span>3 jours</span>
+        </button>
+        <button class="btn-snooze-option" onclick="snoozeAlert(168)">
+          <span class="glyphicon glyphicon-calendar"></span>
+          <span>1 semaine</span>
+        </button>
+      </div>
+      
+      <hr style="margin:16px 0;border:none;border-top:1px solid var(--grey-300)">
+      
+      <button style="width:100%;padding:10px;background:#E0E0E0;color:#333;border:none;border-radius:6px;font-weight:600;cursor:pointer" onclick="closeModal('snoozeModal')">
+        Annuler
+      </button>
     </div>
   </div>
 </div>
